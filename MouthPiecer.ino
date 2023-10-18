@@ -17,7 +17,6 @@
 #define PB_Thr 0 //-115 //comment calibrer cette valeur? Il faut que pitchbendAnalog au repos donne une valeur MIDI de 0 pour le pitchbend
 #define PB_MIN -8192
 #define PB_MAX 8191
-#define PB_STEP 1
 
 int breathLevel;
 int oldBreath=0;
@@ -331,7 +330,6 @@ void listenForEthernetClients() {
   // listen for incoming clients
   EthernetClient client = server.available();
   if (client) {
-    //Serial.println("Got a client");
     boolean currentLineIsBlank = true;// an http request ends with a blank line
     while (client.connected()) {
       if (client.available()) {

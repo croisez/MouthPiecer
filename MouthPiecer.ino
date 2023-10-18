@@ -25,7 +25,7 @@ int pressureMax = 0;
 int pitchbendMin = 5000;
 int pitchbendMax = -5000;
 u_int16_t pitchBendAnalog = 0;
-int oldPitchbendValue = 0;
+int oldPitchbendAnalog = 0;
 long lastPitchbendTime = 0;
 
 byte LedPin = 13;    // select the pin for the LED
@@ -139,15 +139,12 @@ void CapturePitchBend() {
   pitchBendAnalog = adc->analogRead(A1);
   adc->resetError();
 
-  //debugVal(pitchBendValue);
-
-  int pitchBendValue = map( constrain(pitchBendAnalog, pitchbendMin + PB_Thr, pitchbendMax), pitchbendMin + PB_Thr, pitchbendMax, PB_MIN, PB_MAX);
-
-  if (abs(pitchBendValue - oldPitchbendValue) >= 2) {
+  if (abs(pitchBendAnalog - oldPitchbendAnalog) > 1) {
     digitalWrite(LedPin, HIGH);
+    int pitchBendValue = map( constrain(pitchBendAnalog, pitchbendMin + PB_Thr, pitchbendMax) , pitchbendMin + PB_Thr , pitchbendMax , PB_MIN , PB_MAX);
     SendPitchBend(pitchBendValue);
     digitalWrite(LedPin, LOW);
-    //Serial.println(String(pitchbendMin) + "," + String(pitchBendAnalog) + "," + String(pitchbendMax));
+    Serial.println(String(pitchbendMin) + "," + String(pitchBendAnalog) + "," + String(pitchbendMax));
   }
   /*if (oldPitchbendValue < pitchBendValue){
     for (int pbv=oldPitchbendValue; pbv < pitchBendValue; pbv += PB_STEP) SendPitchBend(pbv);
@@ -155,7 +152,7 @@ void CapturePitchBend() {
     for (int pbv=oldPitchbendValue; pbv > pitchBendValue; pbv -= PB_STEP) SendPitchBend(pbv);
   }*/
 
-  oldPitchbendValue = pitchBendValue;
+  oldPitchbendAnalog = pitchBendAnalog;
 }
 
 void setup() {
@@ -330,6 +327,7 @@ void listenForEthernetClients() {
   // listen for incoming clients
   EthernetClient client = server.available();
   if (client) {
+    //Serial.println("Got a client");
     boolean currentLineIsBlank = true;// an http request ends with a blank line
     while (client.connected()) {
       if (client.available()) {

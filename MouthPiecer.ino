@@ -9,26 +9,25 @@
 #include <NativeEthernet.h>
 #include <TeensyThreads.h>
 
+#define VERSION    "1"
+#define SUBVERSION "0-beta"
 #define USE_DHCP
-//#define DEBUG_VAL
-//#define DEBUG_PRINT
-//#define DEBUG_PLOT
-#define ON_Thr 4 //comment calibrer cette valeur? Il faut que si on ne souffle pas, aucun son ne soit produit. Mais attention, il faut éviter un point dur au démarrage du souffle.
-#define PB_Thr 0 //-115 //comment calibrer cette valeur? Il faut que pitchbendAnalog au repos donne une valeur MIDI de 0 pour le pitchbend
+#define ETHERNET_INIT_TIMEOUT 7
+//#define ON_Thr 4 //comment calibrer cette valeur? Il faut que si on ne souffle pas, aucun son ne soit produit. Mais attention, il faut éviter un point dur au démarrage du souffle.
 #define PB_MIN -8192
 #define PB_MAX 8191
 
-int breathLevel;
-int oldBreath=0;
-int pressureMin = 1023;
-int pressureMax = 0;
+//int breathLevel;
+//int oldBreath=0;
+//int pressureMin = 1023;
+//int pressureMax = 0;
 int pitchbendMin = 5000;
 int pitchbendMax = -5000;
 u_int16_t pitchBendAnalog = 0;
 int oldPitchbendAnalog = 0;
 long lastPitchbendTime = 0;
 
-byte LedPin = 13;    // select the pin for the LED
+byte LedPin = 13;
 
 ADC *adc = new ADC();
 USBHost usbhost;
@@ -36,7 +35,7 @@ USBHub hub1(usbhost);
 USBHub hub2(usbhost);
 MIDIDevice usbhostMIDI(usbhost);
 
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; //Here choose MAC address for Ethernet module
 #ifndef USE_DHCP
 IPAddress ip(192, 168, 1, 50);
 #endif
@@ -54,32 +53,13 @@ void ethInit(){
     );
     connectedToEth = true;
   }
-  Serial.println("End of ethInit thread");
-}
-
-//  Debug function using USB serial port
-void debugVal(String str){
-  #ifdef DEBUG_VAL
-  Serial.println(str);
-  #endif
-}
-void debugPrint(String str){
-  #ifdef DEBUG_PRINT
-  Serial.print(str);
-  #endif
-}
-void debugPrintln(String str){
-  #ifdef DEBUG_PRINT
-  Serial.println(str);
-  #endif
+  //Serial.println("End of ethInit thread");
 }
 
 void debugPlot(String varname, int val, int next = 0){
-  #ifdef DEBUG_PLOT
   Serial.print(varname); Serial.print(":"); 
   Serial.print(val);
   if (next) {Serial.print(", ");} else {Serial.print("\n");}
-  #endif
 }
 
 void SendNoteOn(byte note, byte velocity = 127, byte channel = 1) {
@@ -92,9 +72,9 @@ void SendNoteOff(byte note, byte channel = 1) {
   usbMIDI.sendNoteOff(note, 0, channel);
 }
 
-void SendControlChange(byte cc, byte breathLevel, byte channel = 1) {
-  //midiSend((0xB0 | (channel-1)), cc, breathLevel);
-  usbMIDI.sendControlChange(cc, breathLevel, channel);
+void SendControlChange(byte cc, byte value, byte channel = 1) {
+  //midiSend((0xB0 | (channel-1)), cc, value);
+  usbMIDI.sendControlChange(cc, value, channel);
 }
 
 void SendPitchBend(int pitchBend, byte channel = 1) {
@@ -104,7 +84,7 @@ void SendPitchBend(int pitchBend, byte channel = 1) {
   usbMIDI.sendPitchBend(pitchBend, channel);
 }
 
-  //  Send a three byte midi message  
+//  Send a three byte midi message to the MIDI DIN-5pin connector
 /*void midiSend(byte midistatus, byte data1, byte data2) 
 {
   digitalWrite(LedPin,HIGH);  // indicate we're sending MIDI data
@@ -114,48 +94,43 @@ void SendPitchBend(int pitchBend, byte channel = 1) {
   digitalWrite(LedPin,LOW);  // indicate we're sending MIDI data
 }*/
 
+/*
 void CaptureBreath(){
-  //breathLevel = adc->analogRead(A0);
-  //adc->resetError();
-
-  /*debugPlot("minP", pressureMin, 1);
-  debugPlot("breathP", breathLevel, 1);
-  debugPlot("maxP", pressureMax,1);*/
+  //breathLevel = adc->analogRead(A0); adc->resetError();
+  //debugPlot("minP", pressureMin, 1); debugPlot("breathP", breathLevel, 1); debugPlot("maxP", pressureMax,1);
 
   breathLevel = oldBreath*0.0+breathLevel*1.0;
   oldBreath = breathLevel;
   breathLevel = map(constrain(breathLevel, pressureMin + ON_Thr, pressureMax), pressureMin + ON_Thr, pressureMax, 0, 127);
-  breathLevel = 127; //Force to disable
-  //SendControlChange(7, breathLevel);
+  SendControlChange(2, breathLevel);
 }
-
-float fmap(float x, float in_min, float in_max, float out_min, float out_max)
-{
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
+*/
 
 // Le controleur USB_O2 envoie 32 messages maximum de 0 à 8191, et idem de -8192 à 0, en 128 ms. Ce qui fait 4 ms par message de PitchBend.
 void CapturePitchBend() {
   pitchBendAnalog = adc->analogRead(A1);
   adc->resetError();
 
-  if (abs(pitchBendAnalog - oldPitchbendAnalog) > 1) {
+  if (pitchbendMin > pitchBendAnalog) pitchbendMin = pitchBendAnalog;
+  if (pitchbendMax < pitchBendAnalog) pitchbendMax = pitchBendAnalog;
+
+  if (abs(pitchBendAnalog - oldPitchbendAnalog) > 2) {
     digitalWrite(LedPin, HIGH);
-    int pitchBendValue = map( constrain(pitchBendAnalog, pitchbendMin + PB_Thr, pitchbendMax) , pitchbendMin + PB_Thr , pitchbendMax , PB_MIN , PB_MAX);
+    int pitchBendValue = map( constrain(pitchBendAnalog, pitchbendMin, pitchbendMax) , pitchbendMin, pitchbendMax , PB_MIN , PB_MAX);
     SendPitchBend(pitchBendValue);
     digitalWrite(LedPin, LOW);
-    Serial.println(String(pitchbendMin) + "," + String(pitchBendAnalog) + "," + String(pitchbendMax));
+    //Serial.println(String(pitchbendMin) + "," + String(pitchBendAnalog) + "," + String(pitchbendMax));
+    //Serial.println("-8192," + String(pitchBendValue) + ",8192");
   }
-  /*if (oldPitchbendValue < pitchBendValue){
-    for (int pbv=oldPitchbendValue; pbv < pitchBendValue; pbv += PB_STEP) SendPitchBend(pbv);
-  } else if (oldPitchbendValue > pitchBendValue) {
-    for (int pbv=oldPitchbendValue; pbv > pitchBendValue; pbv -= PB_STEP) SendPitchBend(pbv);
-  }*/
 
   oldPitchbendAnalog = pitchBendAnalog;
 }
 
+// ########################################### S E T U P ###########################################
 void setup() {
+  Serial.begin(115200);
+  Serial.println("####  MouthPiecer v" + String(VERSION) + "." + String(SUBVERSION) + "  ####");
+
   pinMode(LedPin,OUTPUT);
   //pinMode(A0, INPUT);
   pinMode(A1, INPUT);
@@ -169,21 +144,19 @@ void setup() {
   adc->adc1->setConversionSpeed(ADC_CONVERSION_SPEED::MED_SPEED); // change the conversion speed
   adc->adc1->setSamplingSpeed(ADC_SAMPLING_SPEED::MED_SPEED);     // change the sampling speed
 
-  delay(500); 
-  Serial.begin(115200);
-  delay(2000);// Wait at least 1.5 seconds before turning on USB Host.
+  delay(1500);// Wait at least 1.5 seconds before turning on USB Host.
 
   usbhost.begin();
   usbhostMIDI.setHandleNoteOn(onMidiHostNoteOn);
   usbhostMIDI.setHandleNoteOff(onMidiHostNoteOff);
   usbhostMIDI.setHandleControlChange(onMidiHostControlChange);
 
-  calibrateSensors();
+  //calibrateSensors();
 
   threads.addThread(ethInit);
   Serial.println("Searching for ethernet connection...");
   long ethSavedTime = millis();
-  while(!connectedToEth && millis() - ethSavedTime < 10000) { delay(1000); }
+  while(!connectedToEth && millis() - ethSavedTime < 1000 * ETHERNET_INIT_TIMEOUT) { delay(1000); }
   if(connectedToEth){
     Serial.println("Connected to ethernet");
     Serial.print("IP address: ");
@@ -204,23 +177,27 @@ void setup() {
   Serial.println("Starting MouthPiecer main loop");
 }
 
+// ########################################### L O O P ###########################################
 void loop() {
-  if (connectedToEth && (millis() - lastEthernetClientTime > 500)) {
+  if (connectedToEth && (millis() - lastEthernetClientTime > 500)) { //500ms = do not give too much priority to web screen refresh
     listenForEthernetClients();
     lastEthernetClientTime = millis();
   }
   
   ProcessMidiLoop();
-  //demo2();
+#ifdef DEMO
+  demo1();
+#endif
 }
 
-/* *********************************DEMO******************************************* */
+// ########################################### DEMOS ###########################################
 void demo1() {
-    SendNoteOn(80);
-    SendControlChange(7,127);
-    while(1){
-      ProcessMidiLoop();
-    }
+    //byte note = random(30,85);
+    byte note = 60;
+    SendNoteOn(note);
+    SendControlChange(2,100);
+    delay(200);
+    SendNoteOff(note);
 }
 
 void demo2() {
@@ -233,13 +210,13 @@ void demo2() {
     }
     SendNoteOff(note);
 }
-/* *********************************DEMO******************************************* */
+/* **************************************************************************** */
 
 void ProcessMidiLoop() {
   usbhost.Task();
   usbhostMIDI.read();
   usbMIDI.read();
-  if (millis() - lastPitchbendTime > 4) {
+  if (millis() - lastPitchbendTime > 4) { //Do not send another pitch bend message sooner than 4ms.
     CapturePitchBend();
     lastPitchbendTime = millis();
   }
@@ -249,17 +226,16 @@ void onMidiHostNoteOn(byte channel, byte note, byte velocity) {
   // debugPrint("Note On, ch="); debugPrint(channel); debugPrint(", note="); debugPrint(note); debugPrint(", velocity="); debugPrintln(velocity);
   SendNoteOn(note, velocity, channel);  
 }
-
 void onMidiHostNoteOff(byte channel, byte note, byte velocity) {
   // debugPrint("Note Off, ch="); debugPrint(channel); debugPrint(", note="); debugPrint(note); debugPrint(", velocity="); debugPrintln(velocity);
   SendNoteOff(note);
 }
-
 void onMidiHostControlChange(byte channel, byte control, byte value) {
   // debugPrint("Control Change, ch="); debugPrint(channel); debugPrint(", control="); debugPrint(control); debugPrint(", value="); debugPrint(value);
   SendControlChange(control, value);
 }
 
+#if 0
 void calibrateSensors(){
   Serial.println("Start of sensors calibration for 5s...");
  
@@ -279,11 +255,12 @@ void calibrateSensors(){
   }
  
   Serial.println("End of sensors calibration:");
-  /*Serial.print("Min pressure: "); Serial.print(pressureMin); Serial.print(", Max pressure: "); Serial.print(pressureMax);*/
+  //Serial.print("Min pressure: "); Serial.print(pressureMin); Serial.print(", Max pressure: "); Serial.print(pressureMax);
   Serial.print("Min pitchBend: "); Serial.print(pitchbendMin); Serial.print(", Max pitchBend: "); Serial.println(pitchbendMax);
   delay(3000);
   //for (u_int16_t i = pitchbendMin - 5; i < pitchbendMax + 5; i++) { int pbv = map( constrain(i, pitchbendMin, pitchbendMax), pitchbendMin, pitchbendMax, PB_MIN, PB_MAX); Serial.print(i); Serial.print("; ");Serial.println(pbv);}
 }
+#endif
 
 void EthernetRequestDhcpLease() {
   switch (Ethernet.maintain()) {
@@ -295,8 +272,7 @@ void EthernetRequestDhcpLease() {
 
   case 2:
     //renewed success
-    Serial.println("Renewed success");
-    //print your local IP address:
+    Serial.println("Renewed success.");
     Serial.print("IP address: ");
     Serial.println(Ethernet.localIP());
     return true;
@@ -310,25 +286,23 @@ void EthernetRequestDhcpLease() {
 
   case 4:
     //rebind success
-    Serial.println("Rebind success");
-    //print your local IP address:
+    Serial.println("Rebind success.");
     Serial.print("IP address: ");
     Serial.println(Ethernet.localIP());
     return true;
     break;
 
-  default:
-    //nothing happened
+  default: //nothing happened
     return true;
     break;
   }
 }
+
+//Embryon of a web service, for exchanging information through a web browser with this application
 void listenForEthernetClients() {
-  // listen for incoming clients
-  EthernetClient client = server.available();
+  EthernetClient client = server.available(); // listen for incoming clients
   if (client) {
-    //Serial.println("Got a client");
-    boolean currentLineIsBlank = true;// an http request ends with a blank line
+    boolean currentLineIsBlank = true; // an http request ends with a blank line
     while (client.connected()) {
       if (client.available()) {
         char c = client.read();
@@ -338,7 +312,7 @@ void listenForEthernetClients() {
           client.println("HTTP/1.1 200 OK");
           client.println("Content-Type: text/html");
           client.println();
-          int pbv = map( constrain(pitchBendAnalog, pitchbendMin + PB_Thr, pitchbendMax), pitchbendMin + PB_Thr, pitchbendMax, PB_MIN, PB_MAX);
+          int pbv = map( constrain(pitchBendAnalog, pitchbendMin, pitchbendMax), pitchbendMin, pitchbendMax, PB_MIN, PB_MAX);
           // print the current readings, in HTML format:
           client.print("AnalogPitch: [" + String(pitchbendMin) + " < " + String(pitchBendAnalog) + " < " + String(pitchbendMax) + "]");
           client.println("<br />");
@@ -347,13 +321,13 @@ void listenForEthernetClients() {
           break;
         }
         if (c == '\n') {
-          currentLineIsBlank = true;// you're starting a new line
+          currentLineIsBlank = true;
         } else if (c != '\r') {
-          currentLineIsBlank = false;// you've gotten a character on the current line
+          currentLineIsBlank = false;
         }
       }
     }
-    delay(1);// give the web browser time to receive the data
-    client.stop();// close the connection
+    delay(1);
+    client.stop();
   }
 }

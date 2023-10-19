@@ -1,10 +1,3 @@
-// https://forum.pjrc.com/threads/66835-T4-Using-USB-Host-with-MIDI
-// https://little-scale.blogspot.com/2021/04/midi-usb-host-to-and-from-midi-5-pin.html
-// https://github.com/vjmuzik/NativeEthernet/tree/master/examples
-// https://www.electronicshub.org/hall-effect-sensor-with-arduino/
-// https://github.com/FortySevenEffects/arduino_midi_library
-// https://www.pjrc.com/teensy/td_libs_MIDI.html
-// https://www.pjrc.com/teensy/td_midi.html
 #include <USBHost_t36.h>
 #include <ADC.h>
 #include <ADC_util.h>

@@ -4,7 +4,7 @@
 #include <MIDI.h>
 
 #define VERSION    "1"
-#define SUBVERSION "1-beta"
+#define SUBVERSION "2-beta"
 
 // Your configuration here =>
 // You can send MIDIOUT through DIN-5 plug, or through usbMidi device. Use USE_DIN_FOR_MIDIOUT define for this purpose.
@@ -13,6 +13,7 @@
 //#define USE_ETHERNET
 // You can generate fake MIDI traffic as a demo, when no MIDI device is connected on the USBHost MIDI port. Use USE_DEMO define for this purpose.
 //#define USE_DEMO
+
 #define PB_MIN -8192
 #define PB_MAX 8191
 // <= Your configuration here
@@ -84,7 +85,7 @@ void CapturePitchBend() {
 
   if (abs(pitchBendAnalog - oldPitchbendAnalog) > 2) {
     digitalWrite(LedPin, HIGH);
-    int pitchBendValue = map( constrain(pitchBendAnalog, pitchbendMin, pitchbendMax) , pitchbendMin, pitchbendMax , PB_MIN , PB_MAX);
+    int pitchBendValue = map( constrain(pitchBendAnalog, pitchbendMin, pitchbendMax) , pitchbendMin, pitchbendMax , PB_MAX , PB_MIN);
     SendPitchBend(pitchBendValue);
     digitalWrite(LedPin, LOW);
     
@@ -129,6 +130,9 @@ void setup() {
   digitalWrite(LedPin, HIGH); delay(200); digitalWrite(LedPin, LOW); delay(200); 
 
   Serial.println("Starting MouthPiecer main loop");
+#ifdef USE_DEMO
+  Serial.println("DEMO mode activated");
+#endif
 }
 
 // ########################################### L O O P ###########################################

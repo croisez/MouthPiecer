@@ -4,15 +4,24 @@
 #include <MIDI.h>
 
 #define VERSION    "1"
-#define SUBVERSION "2-beta"
+#define SUBVERSION "2-alpha"
 
 // Your configuration here =>
+
 // You can send MIDIOUT through DIN-5 plug, or through usbMidi device. Use USE_DIN_FOR_MIDIOUT define for this purpose.
 //#define USE_DIN_FOR_MIDIOUT
+
 // You can use a Teensy4.1 Ethernet adapter to have access to web service for configuration and debug. Use USE_ETHERNET define for this purpose.
 //#define USE_ETHERNET
+
 // You can generate fake MIDI traffic as a demo, when no MIDI device is connected on the USBHost MIDI port. Use USE_DEMO define for this purpose.
 //#define USE_DEMO
+
+// Uncomment to print PitchBend values in serial terminal
+//#define DEBUG_PITCHBEND
+
+// Definition of Low-Pass filter coef, order 1
+#define SMOOTHING_COEF 0.3
 
 #define PB_MIN -8192
 #define PB_MAX 8191
@@ -35,6 +44,7 @@ USBHub hub2(usbhost);
 MIDIDevice usbhostMIDI(usbhost);
 boolean connectedToEth = false;
 long lastEthernetClientTime = 0;
+long lastDemoTime = 0;
 
 
 void debugPlot(String varname, int val, int next = 0){
@@ -74,6 +84,13 @@ void SendPitchBend(int pitchBend, byte channel = 1) {
 #endif
 }
 
+float pbvMem = 0.0;
+
+int SmoothPitchBend(int pbv) {
+  float pvbSmooth = pbvMem + SMOOTHING_COEF * (pbv - pbvMem);
+  pbvMem = pvbSmooth;
+  return (int)pvbSmooth;
+}
 
 // Exemple: le controleur USB_O2 envoie 32 messages maximum de 0 à 8191, et idem de -8192 à 0, en 128 ms. Ce qui fait 4 ms par message de PitchBend.
 void CapturePitchBend() {
@@ -83,16 +100,19 @@ void CapturePitchBend() {
   if (pitchbendMin > pitchBendAnalog) pitchbendMin = pitchBendAnalog;
   if (pitchbendMax < pitchBendAnalog) pitchbendMax = pitchBendAnalog;
 
-  if (abs(pitchBendAnalog - oldPitchbendAnalog) > 2) {
+//  if (abs(pitchBendAnalog - oldPitchbendAnalog) > 0) {
     digitalWrite(LedPin, HIGH);
     int pitchBendValue = map( constrain(pitchBendAnalog, pitchbendMin, pitchbendMax) , pitchbendMin, pitchbendMax , PB_MAX , PB_MIN);
+    //int pitchBendValueLP = SmoothPitchBend(pitchBendValue);
     SendPitchBend(pitchBendValue);
     digitalWrite(LedPin, LOW);
     
+#ifdef DEBUG_PITCHBEND  
     //debugPlot("PB_MIN", PB_MIN, 1); debugPlot("PB_MAX", PB_MAX, 1); debugPlot("pitchBend", pitchBend);
     //Serial.println(String(pitchbendMin) + "," + String(pitchBendAnalog) + "," + String(pitchbendMax));
-    //Serial.println(PB_MIN + "," + String(pitchBendValue) + "," + PB_MAX);
-  }
+    Serial.println(String(PB_MIN) + "," + String(pitchBendValueLP) + "," + String(PB_MAX));
+#endif
+//  }
 
   oldPitchbendAnalog = pitchBendAnalog;
 }
@@ -147,19 +167,22 @@ void loop() {
   ProcessMidiLoop();
 
 #ifdef USE_DEMO
-  demo1();
+  if (millis() - lastDemoTime > 3000) {
+    demo();
+    lastDemoTime = millis();
+  }
 #endif
 }
 
 // ########################################### DEMOS ###########################################
 // Use the demos when you want to generate MIDI traffic without pluging a real MIDI device on the USBHost MIDI port
-void demo1() {
-    //byte note = random(30,85);
-    byte note = 60;
+void demo() {
+    byte note = random(30,85);
+    //byte note = 60;
     SendNoteOn(note);
     SendControlChange(2, 100);
-    delay(200);
-    SendNoteOff(note);
+    //delay(200);
+    //SendNoteOff(note);
 }
 void demo2() {
     int note = random(30,85);

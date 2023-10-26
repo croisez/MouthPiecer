@@ -4,7 +4,7 @@
 #include <MIDI.h>
 
 #define VERSION    "1"
-#define SUBVERSION "2-alpha"
+#define SUBVERSION "3-alpha"
 
 // Your configuration here =>
 
@@ -25,6 +25,7 @@
 
 #define PB_MIN -8192
 #define PB_MAX 8191
+#define CC_TRAVELSAX2 2
 // <= Your configuration here
 
 #ifdef USE_DIN_FOR_MIDIOUT
@@ -45,7 +46,9 @@ MIDIDevice usbhostMIDI(usbhost);
 boolean connectedToEth = false;
 long lastEthernetClientTime = 0;
 long lastDemoTime = 0;
-
+byte breathValueMin = 0;
+byte currentBreathValue;
+long lastButtonTime = 0;
 
 void debugPlot(String varname, int val, int next = 0){
   Serial.print(varname); Serial.print(":");  Serial.print(val);
@@ -122,6 +125,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println("####  MouthPiecer v" + String(VERSION) + "." + String(SUBVERSION) + "  ####");
 
+  pinMode(7, INPUT_PULLUP);
   pinMode(LedPin,OUTPUT);
   pinMode(A1, INPUT);
 
@@ -166,6 +170,11 @@ void loop() {
 
   ProcessMidiLoop();
 
+if (millis() - lastButtonTime > 200) {
+  ProcessButton();
+  lastButtonTime = millis();
+}
+
 #ifdef USE_DEMO
   if (millis() - lastDemoTime > 3000) {
     demo();
@@ -174,7 +183,7 @@ void loop() {
 #endif
 }
 
-// ########################################### DEMOS ###########################################
+// ########################################### DEMOS>> ###########################################
 // Use the demos when you want to generate MIDI traffic without pluging a real MIDI device on the USBHost MIDI port
 void demo() {
     byte note = random(30,85);
@@ -193,7 +202,16 @@ void demo2() {
     }
     SendNoteOff(note);
 }
-// ########################################### DEMOS ###########################################
+// ########################################### <<DEMOS ###########################################
+
+void ProcessButton() {
+  if (! digitalRead(7)) {
+    //Serial.println("Button pressed");
+    breathValueMin = currentBreathValue;
+    pitchbendMin = 5000;
+    pitchbendMax = -5000;
+  }
+}
 
 void ProcessMidiLoop() {
   usbhost.Task();
@@ -210,13 +228,26 @@ void ProcessMidiLoop() {
 }
 
 void onMidiHostNoteOn(byte channel, byte note, byte velocity) {
+  //Serial.print("Note On, ch="); Serial.print(channel); Serial.print(", note="); Serial.print(note); Serial.print(", velocity="); Serial.println(velocity);
   SendNoteOn(note, velocity, channel);  
 }
 void onMidiHostNoteOff(byte channel, byte note, byte velocity) {
   SendNoteOff(note);
 }
 void onMidiHostControlChange(byte channel, byte control, byte value) {
-  SendControlChange(control, value);
+  int ccValue;
+  byte breathValueMax = 127;
+  byte BV_MIN = 0;
+  byte BV_MAX = 127;
+
+  if (control == CC_TRAVELSAX2) {
+    currentBreathValue = value;
+    ccValue = map( constrain(value, breathValueMin, breathValueMax) , breathValueMin, breathValueMax , BV_MIN , BV_MAX);
+  } else {
+    ccValue = value;
+  }
+
+  SendControlChange(control, ccValue);
 }
 
 

@@ -26,6 +26,7 @@
 #define PB_MIN -8192
 #define PB_MAX 8191
 #define CC_TRAVELSAX2 2
+#define BUTTON_PIN 8
 // <= Your configuration here
 
 #ifdef USE_DIN_FOR_MIDIOUT
@@ -112,8 +113,8 @@ void CapturePitchBend() {
     
 #ifdef DEBUG_PITCHBEND  
     //debugPlot("PB_MIN", PB_MIN, 1); debugPlot("PB_MAX", PB_MAX, 1); debugPlot("pitchBend", pitchBend);
-    //Serial.println(String(pitchbendMin) + "," + String(pitchBendAnalog) + "," + String(pitchbendMax));
-    Serial.println(String(PB_MIN) + "," + String(pitchBendValueLP) + "," + String(PB_MAX));
+    Serial.println(String(pitchbendMin) + "," + String(pitchBendAnalog) + "," + String(pitchbendMax));
+    //Serial.println(String(PB_MIN) + "," + String(pitchBendValueLP) + "," + String(PB_MAX));
 #endif
 //  }
 
@@ -125,9 +126,9 @@ void setup() {
   Serial.begin(115200);
   Serial.println("####  MouthPiecer v" + String(VERSION) + "." + String(SUBVERSION) + "  ####");
 
-  pinMode(7, INPUT_PULLUP);
   pinMode(LedPin,OUTPUT);
   pinMode(A1, INPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 
   adc->adc1->setAveraging(32);                                    // set number of averages
   adc->adc1->setResolution(16);                                   // set bits of resolution
@@ -170,10 +171,15 @@ void loop() {
 
   ProcessMidiLoop();
 
-if (millis() - lastButtonTime > 200) {
-  ProcessButton();
-  lastButtonTime = millis();
-}
+  if (millis() - lastButtonTime > 200) {
+    if (! digitalRead(BUTTON_PIN)) {
+      Serial.println("Button pressed");
+      breathValueMin = currentBreathValue;
+      pitchbendMin = 5000;
+      pitchbendMax = -5000;
+    }
+    lastButtonTime = millis();
+  }
 
 #ifdef USE_DEMO
   if (millis() - lastDemoTime > 3000) {
@@ -203,15 +209,6 @@ void demo2() {
     SendNoteOff(note);
 }
 // ########################################### <<DEMOS ###########################################
-
-void ProcessButton() {
-  if (! digitalRead(7)) {
-    //Serial.println("Button pressed");
-    breathValueMin = currentBreathValue;
-    pitchbendMin = 5000;
-    pitchbendMax = -5000;
-  }
-}
 
 void ProcessMidiLoop() {
   usbhost.Task();

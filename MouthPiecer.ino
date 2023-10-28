@@ -89,7 +89,6 @@ void SendPitchBend(int pitchBend, byte channel = 1) {
 }
 
 float pbvMem = 0.0;
-
 int SmoothPitchBend(int pbv) {
   float pvbSmooth = pbvMem + SMOOTHING_COEF * (pbv - pbvMem);
   pbvMem = pvbSmooth;
@@ -135,7 +134,7 @@ void setup() {
   adc->adc1->setConversionSpeed(ADC_CONVERSION_SPEED::MED_SPEED); // change the conversion speed
   adc->adc1->setSamplingSpeed(ADC_SAMPLING_SPEED::MED_SPEED);     // change the sampling speed
 
-  delay(1500); // Wait at least 1.5 seconds before turning USBHost ON.
+  delay(2000); // Wait at least 1.5 seconds before turning USBHost ON.
 
 #ifdef USE_DIN_FOR_MIDIOUT
   MIDI.begin();
@@ -173,10 +172,8 @@ void loop() {
 
   if (millis() - lastButtonTime > 200) {
     if (! digitalRead(BUTTON_PIN)) {
-      Serial.println("Button pressed");
-      breathValueMin = currentBreathValue;
-      pitchbendMin = 5000;
-      pitchbendMax = -5000;
+      breathValueMin = currentBreathValue + 2;
+      Serial.println("Minimum breath set to value " + String(breathValueMin));
     }
     lastButtonTime = millis();
   }

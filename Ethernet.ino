@@ -1,3 +1,5 @@
+#ifdef USE_ETHERNET
+
 #include <SPI.h>
 #include <NativeEthernet.h>
 #include <TeensyThreads.h>
@@ -109,3 +111,5 @@ void listenForEthernetClients() {
     client.stop();
   }
 }
+
+#endif

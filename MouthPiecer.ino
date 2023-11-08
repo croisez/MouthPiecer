@@ -4,7 +4,7 @@
 #include <MIDI.h>
 
 #define VERSION    "1"
-#define SUBVERSION "3-alpha"
+#define SUBVERSION "4-alpha"
 
 // Your configuration here =>
 
@@ -20,11 +20,15 @@
 // Uncomment to print PitchBend values in serial terminal
 //#define DEBUG_PITCHBEND
 
-// Definition of Low-Pass filter coef, order 1
-#define SMOOTHING_COEF 0.3
+// Uncomment to print MIDI messages in serial terminal
+//#define DEBUG_MIDI_MSG
+
+// Uncomment to allow reset of PitchBend min & max values while button is pressed
+#define RESET_PB_MINMAX_WITH_BUTTONPRESS
 
 #define PB_MIN -8192
 #define PB_MAX 8191
+#define BREATH_VALUE_MIN 19
 #define CC_TRAVELSAX2 2
 #define BUTTON_PIN 8
 // <= Your configuration here
@@ -47,7 +51,7 @@ MIDIDevice usbhostMIDI(usbhost);
 boolean connectedToEth = false;
 long lastEthernetClientTime = 0;
 long lastDemoTime = 0;
-byte breathValueMin = 0;
+byte breathValueMin = BREATH_VALUE_MIN;
 byte currentBreathValue;
 long lastButtonTime = 0;
 
@@ -57,6 +61,10 @@ void debugPlot(String varname, int val, int next = 0){
 }
 
 void SendNoteOn(byte note, byte velocity = 127, byte channel = 1) {
+#ifdef DEBUG_MIDI_MSG
+  Serial.println("NOTEON: " + String(note) + " velocity=" + String(velocity));
+#endif
+
 #ifdef USE_DIN_FOR_MIDIOUT
   MIDI.sendNoteOn(note, velocity, channel);
 #else
@@ -65,6 +73,10 @@ void SendNoteOn(byte note, byte velocity = 127, byte channel = 1) {
 }
 
 void SendNoteOff(byte note, byte channel = 1) {
+#ifdef DEBUG_MIDI_MSG
+  Serial.println("NOTEOFF: " + String(note));
+#endif
+
 #ifdef USE_DIN_FOR_MIDIOUT
   MIDI.sendNoteOff(note, 0, channel);
 #else
@@ -73,6 +85,10 @@ void SendNoteOff(byte note, byte channel = 1) {
 }
 
 void SendControlChange(byte cc, byte value, byte channel = 1) {
+//#ifdef DEBUG_MIDI_MSG
+//  Serial.println("CC" + String(cc) + " = " + String(value));
+//#endif
+
 #ifdef USE_DIN_FOR_MIDIOUT
   MIDI.sendControlChange(cc, value, channel);
 #else
@@ -81,6 +97,10 @@ void SendControlChange(byte cc, byte value, byte channel = 1) {
 }
 
 void SendPitchBend(int pitchBend, byte channel = 1) {
+//#ifdef DEBUG_MIDI_MSG
+//  Serial.println("Bend = " + String(pitchBend));
+//#endif
+
 #ifdef USE_DIN_FOR_MIDIOUT
   MIDI.sendPitchBend(pitchBend, channel);
 #else
@@ -88,12 +108,6 @@ void SendPitchBend(int pitchBend, byte channel = 1) {
 #endif
 }
 
-float pbvMem = 0.0;
-int SmoothPitchBend(int pbv) {
-  float pvbSmooth = pbvMem + SMOOTHING_COEF * (pbv - pbvMem);
-  pbvMem = pvbSmooth;
-  return (int)pvbSmooth;
-}
 
 // Exemple: le controleur USB_O2 envoie 32 messages maximum de 0 à 8191, et idem de -8192 à 0, en 128 ms. Ce qui fait 4 ms par message de PitchBend.
 void CapturePitchBend() {
@@ -106,7 +120,6 @@ void CapturePitchBend() {
 //  if (abs(pitchBendAnalog - oldPitchbendAnalog) > 0) {
     digitalWrite(LedPin, HIGH);
     int pitchBendValue = map( constrain(pitchBendAnalog, pitchbendMin, pitchbendMax) , pitchbendMin, pitchbendMax , PB_MAX , PB_MIN);
-    //int pitchBendValueLP = SmoothPitchBend(pitchBendValue);
     SendPitchBend(pitchBendValue);
     digitalWrite(LedPin, LOW);
     
@@ -141,6 +154,7 @@ void setup() {
 #endif
 
   usbhost.begin();
+
   usbhostMIDI.setHandleNoteOn(onMidiHostNoteOn);
   usbhostMIDI.setHandleNoteOff(onMidiHostNoteOff);
   usbhostMIDI.setHandleControlChange(onMidiHostControlChange);
@@ -174,6 +188,10 @@ void loop() {
     if (! digitalRead(BUTTON_PIN)) {
       breathValueMin = currentBreathValue + 2;
       Serial.println("Minimum breath set to value " + String(breathValueMin));
+#ifdef RESET_PB_MINMAX_WITH_BUTTONPRESS
+      pitchbendMin = 5000;
+      pitchbendMax = -5000;
+#endif
     }
     lastButtonTime = millis();
   }

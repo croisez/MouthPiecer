@@ -136,7 +136,7 @@ void CapturePitchBend() {
 // ########################################### S E T U P ###########################################
 void setup() {
   Serial.begin(115200);
-  Serial.println("####  MouthPiecer v" + String(VERSION) + "." + String(SUBVERSION) + "  ####");
+  Serial.println("\r\n####  MouthPiecer v" + String(VERSION) + "." + String(SUBVERSION) + "  ####");
 
   pinMode(LedPin,OUTPUT);
   pinMode(A1, INPUT);

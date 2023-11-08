@@ -16,3 +16,5 @@ https://github.com/FortySevenEffects/arduino_midi_library
 https://www.pjrc.com/teensy/td_libs_MIDI.html
 https://www.pjrc.com/teensy/td_midi.html
 https://www.cs.cmu.edu/~music/cmsip/readings/MIDI%20tutorial%20for%20programmers.html
+https://diyi0t.com/tcrt5000-line-tracking-module-arduino-esp8266-esp32/
+https://dyor.webs.upv.es/en/seguilineas/

@@ -37,8 +37,8 @@
   MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
 #endif
 
-int pitchbendMin = 5000;
-int pitchbendMax = -5000;
+int pitchbendMin = 2000;
+int pitchbendMax = -2000;
 u_int16_t pitchBendAnalog = 0;
 int oldPitchbendAnalog = 0;
 long lastPitchbendTime = 0;
@@ -133,6 +133,67 @@ void CapturePitchBend() {
   oldPitchbendAnalog = pitchBendAnalog;
 }
 
+
+
+// ########################################### DEMOS>> ###########################################
+// Use the demos when you want to generate MIDI traffic without pluging a real MIDI device on the USBHost MIDI port
+void demo() {
+    byte note = random(30,85);
+    //byte note = 60;
+    SendNoteOn(note);
+    SendControlChange(2, 100);
+    //delay(200);
+    //SendNoteOff(note);
+}
+void demo2() {
+    int note = random(30,85);
+    SendNoteOn(note);
+    for(int i=0;i<400;i++){
+      ProcessMidiLoop();
+      delay(10);
+    }
+    SendNoteOff(note);
+}
+// ########################################### <<DEMOS ###########################################
+
+void onMidiHostNoteOn(byte channel, byte note, byte velocity) {
+  //Serial.print("Note On, ch="); Serial.print(channel); Serial.print(", note="); Serial.print(note); Serial.print(", velocity="); Serial.println(velocity);
+  SendNoteOn(note, velocity, channel);  
+}
+void onMidiHostNoteOff(byte channel, byte note, byte velocity) {
+  SendNoteOff(note);
+}
+void onMidiHostControlChange(byte channel, byte control, byte value) {
+  int ccValue;
+  byte breathValueMax = 127;
+  byte BV_MIN = 0;
+  byte BV_MAX = 127;
+
+  if (control == CC_TRAVELSAX2) {
+    currentBreathValue = value;
+    ccValue = map( constrain(value, breathValueMin, breathValueMax) , breathValueMin, breathValueMax , BV_MIN , BV_MAX);
+  } else {
+    ccValue = value;
+  }
+
+  SendControlChange(control, ccValue);
+}
+
+void ProcessMidiLoop() {
+  usbhost.Task();
+  usbhostMIDI.read();
+
+#ifndef USE_DIN_FOR_MIDIOUT
+  usbMIDI.read();
+#endif
+
+  pitchBendAnalog = adc->analogRead(A1);
+  if (millis() - lastPitchbendTime > 4) { //Do not send another pitch bend message sooner than 4ms.
+    CapturePitchBend();
+    lastPitchbendTime = millis();
+  }
+}
+
 // ########################################### S E T U P ###########################################
 void setup() {
   Serial.begin(115200);
@@ -142,8 +203,8 @@ void setup() {
   pinMode(A1, INPUT);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  adc->adc1->setAveraging(32);                                    // set number of averages
-  adc->adc1->setResolution(16);                                   // set bits of resolution
+  adc->adc1->setAveraging(0);                                     // set number of averages
+  adc->adc1->setResolution(12);                                   // set bits of resolution
   adc->adc1->setConversionSpeed(ADC_CONVERSION_SPEED::MED_SPEED); // change the conversion speed
   adc->adc1->setSamplingSpeed(ADC_SAMPLING_SPEED::MED_SPEED);     // change the sampling speed
 
@@ -189,8 +250,8 @@ void loop() {
       breathValueMin = currentBreathValue + 2;
       Serial.println("Minimum breath set to value " + String(breathValueMin));
 #ifdef RESET_PB_MINMAX_WITH_BUTTONPRESS
-      pitchbendMin = 5000;
-      pitchbendMax = -5000;
+      pitchbendMin = 2000;
+      pitchbendMax = -2000;
 #endif
     }
     lastButtonTime = millis();
@@ -203,64 +264,3 @@ void loop() {
   }
 #endif
 }
-
-// ########################################### DEMOS>> ###########################################
-// Use the demos when you want to generate MIDI traffic without pluging a real MIDI device on the USBHost MIDI port
-void demo() {
-    byte note = random(30,85);
-    //byte note = 60;
-    SendNoteOn(note);
-    SendControlChange(2, 100);
-    //delay(200);
-    //SendNoteOff(note);
-}
-void demo2() {
-    int note = random(30,85);
-    SendNoteOn(note);
-    for(int i=0;i<400;i++){
-      ProcessMidiLoop();
-      delay(10);
-    }
-    SendNoteOff(note);
-}
-// ########################################### <<DEMOS ###########################################
-
-void ProcessMidiLoop() {
-  usbhost.Task();
-  usbhostMIDI.read();
-
-#ifndef USE_DIN_FOR_MIDIOUT
-  usbMIDI.read();
-#endif
-
-  if (millis() - lastPitchbendTime > 4) { //Do not send another pitch bend message sooner than 4ms.
-    CapturePitchBend();
-    lastPitchbendTime = millis();
-  }
-}
-
-void onMidiHostNoteOn(byte channel, byte note, byte velocity) {
-  //Serial.print("Note On, ch="); Serial.print(channel); Serial.print(", note="); Serial.print(note); Serial.print(", velocity="); Serial.println(velocity);
-  SendNoteOn(note, velocity, channel);  
-}
-void onMidiHostNoteOff(byte channel, byte note, byte velocity) {
-  SendNoteOff(note);
-}
-void onMidiHostControlChange(byte channel, byte control, byte value) {
-  int ccValue;
-  byte breathValueMax = 127;
-  byte BV_MIN = 0;
-  byte BV_MAX = 127;
-
-  if (control == CC_TRAVELSAX2) {
-    currentBreathValue = value;
-    ccValue = map( constrain(value, breathValueMin, breathValueMax) , breathValueMin, breathValueMax , BV_MIN , BV_MAX);
-  } else {
-    ccValue = value;
-  }
-
-  SendControlChange(control, ccValue);
-}
-
-
-

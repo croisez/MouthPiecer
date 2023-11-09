@@ -23,7 +23,10 @@
 #define PB_MIN -8192
 #define PB_MAX 8191
 #define BREATH_VALUE_MIN 19
-#define CC_TRAVELSAX2 2
+#define CC_BREATH 2
+#define CC_FFT 70
+#define F_VALUE_MIN 0.0
+#define F_VALUE_MAX 30.0
 #define BUTTON_PIN 8
 #define PB_ARRAY_SIZE 8
 #define SMOOTHING_COEF 0.3
@@ -164,7 +167,7 @@ void onMidiHostControlChange(byte channel, byte control, byte value) {
   byte BV_MIN = 0;
   byte BV_MAX = 127;
 
-  if (control == CC_TRAVELSAX2) {
+  if (control == CC_BREATH) {
     currentBreathValue = value;
     ccValue = map( constrain(value, breathValueMin, breathValueMax) , breathValueMin, breathValueMax , BV_MIN , BV_MAX);
   } else {
@@ -199,6 +202,12 @@ void CapturePitchBend() {
 }
 
 //___________________________________________________________________________________________________
+double fmap(double x, double in_min, double in_max, double out_min, double out_max)
+{
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+//___________________________________________________________________________________________________
 double LowPass(double in, int idx) {
   float out = fmem[idx] + SMOOTHING_COEF * (in - fmem[idx]);
   fmem[idx] = out;
@@ -211,6 +220,8 @@ void ProcessFFT() {
   pbArray[fftIdx++] = pb - (pbMax - pbMin)/2 - pbMin;
 
   if (fftIdx >= PB_ARRAY_SIZE) {
+    fftIdx = 0;
+
     Fast4::FFT(pbArray, PB_ARRAY_SIZE);
 
     //For each frequency band, low-pass and save energy in array 
@@ -220,6 +231,8 @@ void ProcessFFT() {
 
     //Compare energy in each band, and try to isolate a wining frequency
     //for (int i = 0; i < PB_ARRAY_SIZE / 2; i++) {}
+    byte ccValue = fmap( constrain(F[4], F_VALUE_MIN, F_VALUE_MAX), F_VALUE_MIN, F_VALUE_MAX, 0, 127);
+    SendControlChange(CC_FFT, ccValue);
 
 #ifdef DEBUG_FFT
     debugPlot(String("Min"), 0, 1);
@@ -232,7 +245,6 @@ void ProcessFFT() {
 #ifdef DEBUG_FFT
     debugPlot(String("Max"), 15, 0);
 #endif
-    fftIdx = 0;
   }
 }
 

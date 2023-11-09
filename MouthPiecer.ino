@@ -1,3 +1,9 @@
+/*
+ *      MOUTHPIECE'R  MIDI  DEVICE : device for adding CC to your TravelSax 
+ *      Coded by LM CROISEZ, November 2023
+ *      License: LGPL
+ */
+
 #include <USBHost_t36.h>
 #include <ADC.h>
 #include <ADC_util.h>
@@ -20,30 +26,36 @@
 #define CC_TRAVELSAX2 2
 #define BUTTON_PIN 8
 #define PB_ARRAY_SIZE 8
+#define SMOOTHING_COEF 0.3
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<= Your configuration here
 
 #define VERSION    "1"
-#define SUBVERSION "4-alpha"
+#define SUBVERSION "5"
 
+//#############################################################################################################################################
 #ifdef USE_DIN_FOR_MIDIOUT
   MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
 #endif
 
-int pbMin = 2000;
-int pbMax = -2000;
-int pbAnalog = 0;
-complex pbArray[PB_ARRAY_SIZE];
-int fftIdx = 0;
-long lastFftTime = 0;
-
-int oldpbAnalog = 0;
-long lastPitchbendTime = 0;
-byte LedPin = 13;
 ADC *adc = new ADC();
 USBHost usbhost;
 USBHub hub1(usbhost);
 USBHub hub2(usbhost);
 MIDIDevice usbhostMIDI(usbhost);
+
+int pbMin = 2000;
+int pbMax = -2000;
+int pbAnalog = 0;
+int oldpbAnalog = 0;
+long lastPitchbendTime = 0;
+byte LedPin = 13;
+
+complex pbArray[PB_ARRAY_SIZE];
+int fftIdx = 0;
+long lastFftTime = 0;
+double F[PB_ARRAY_SIZE];
+double fmem[PB_ARRAY_SIZE];
+
 boolean connectedToEth = false;
 long lastEthernetClientTime = 0;
 long lastDemoTime = 0;
@@ -51,16 +63,19 @@ byte breathValueMin = BREATH_VALUE_MIN;
 byte currentBreathValue;
 long lastButtonTime = 0;
 
+//___________________________________________________________________________________________________
 void debugPlot(String varname, int val, int next = 0){
   Serial.print(varname); Serial.print(":");  Serial.print(val);
   if (next) {Serial.print(", ");} else {Serial.print("\n");}
 }
 
+//___________________________________________________________________________________________________
 void debugPlotf(String varname, double val, int next = 0){
   Serial.print(varname); Serial.print(":");  Serial.print(val);
   if (next) {Serial.print(", ");} else {Serial.print("\n");}
 }
 
+//___________________________________________________________________________________________________
 void SendNoteOn(byte note, byte velocity = 127, byte channel = 1) {
 #ifdef DEBUG_MIDI_MSG
   Serial.println("NOTEON: " + String(note) + " velocity=" + String(velocity));
@@ -73,6 +88,7 @@ void SendNoteOn(byte note, byte velocity = 127, byte channel = 1) {
 #endif
 }
 
+//___________________________________________________________________________________________________
 void SendNoteOff(byte note, byte channel = 1) {
 #ifdef DEBUG_MIDI_MSG
   Serial.println("NOTEOFF: " + String(note));
@@ -85,6 +101,7 @@ void SendNoteOff(byte note, byte channel = 1) {
 #endif
 }
 
+//___________________________________________________________________________________________________
 void SendControlChange(byte cc, byte value, byte channel = 1) {
 //#ifdef DEBUG_MIDI_MSG
 //  Serial.println("CC" + String(cc) + " = " + String(value));
@@ -130,13 +147,17 @@ void demo2() {
 }
 // ########################################### <<DEMOS ###########################################
 
+//___________________________________________________________________________________________________
 void onMidiHostNoteOn(byte channel, byte note, byte velocity) {
-  //Serial.print("Note On, ch="); Serial.print(channel); Serial.print(", note="); Serial.print(note); Serial.print(", velocity="); Serial.println(velocity);
   SendNoteOn(note, velocity, channel);  
 }
+
+//___________________________________________________________________________________________________
 void onMidiHostNoteOff(byte channel, byte note, byte velocity) {
   SendNoteOff(note);
 }
+
+//___________________________________________________________________________________________________
 void onMidiHostControlChange(byte channel, byte control, byte value) {
   int ccValue;
   byte breathValueMax = 127;
@@ -153,7 +174,7 @@ void onMidiHostControlChange(byte channel, byte control, byte value) {
   SendControlChange(control, ccValue);
 }
 
-// Exemple: le controleur USB_O2 envoie 32 messages maximum de 0 à 8191, et idem de -8192 à 0, en 128 ms. Ce qui fait 4 ms par message de PitchBend.
+//___________________________________________________________________________________________________
 void CapturePitchBend() {
   pbAnalog = adc->analogRead(A1);
   adc->resetError();
@@ -177,30 +198,35 @@ void CapturePitchBend() {
   oldpbAnalog = pbAnalog;
 }
 
+//___________________________________________________________________________________________________
+double LowPass(double in, int idx) {
+  float out = fmem[idx] + SMOOTHING_COEF * (in - fmem[idx]);
+  fmem[idx] = out;
+  return out;
+}
+
+//___________________________________________________________________________________________________
 void ProcessFFT() {
-  double v[PB_ARRAY_SIZE];
   int pb = adc->analogRead(A1);
   pbArray[fftIdx++] = pb - (pbMax - pbMin)/2 - pbMin;
 
   if (fftIdx >= PB_ARRAY_SIZE) {
     Fast4::FFT(pbArray, PB_ARRAY_SIZE);
 
-    //Compute all modulos for each freq bands
-    for (int i = PB_ARRAY_SIZE / 2; i < PB_ARRAY_SIZE; i++) {
-      v[i] = sqrt(pbArray[i].re() * pbArray[i].re() + pbArray[i].im() * pbArray[i].im());
+    //For each frequency band, low-pass and save energy in array 
+    for (int i = 0; i < PB_ARRAY_SIZE; i++) {
+      F[i] = LowPass( sqrt(pbArray[i].re() * pbArray[i].re() + pbArray[i].im() * pbArray[i].im()) , i);
     }
 
     //Compare energy in each band, and try to isolate a wining frequency
-    for (int i = PB_ARRAY_SIZE / 2; i < PB_ARRAY_SIZE; i++) {
-
-    }
+    //for (int i = 0; i < PB_ARRAY_SIZE / 2; i++) {}
 
 #ifdef DEBUG_FFT
     debugPlot(String("Min"), 0, 1);
 #endif
     for (int i = PB_ARRAY_SIZE / 2; i < PB_ARRAY_SIZE; i++) {
 #ifdef DEBUG_FFT
-      debugPlotf(String(i), v[i], 1);
+      debugPlotf(String(i), F[i], 1);
 #endif
     }
 #ifdef DEBUG_FFT
@@ -210,6 +236,7 @@ void ProcessFFT() {
   }
 }
 
+//___________________________________________________________________________________________________
 void ProcessMidiLoop() {
   usbhost.Task();
   usbhostMIDI.read();

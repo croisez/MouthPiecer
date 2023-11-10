@@ -208,7 +208,6 @@ double fmap(double x, double in_min, double in_max, double out_min, double out_m
 
 //___________________________________________________________________________________________________
 // https://fiiir.com/
-// https://nl.mathworks.com/help/signal/ref/blackmanharris.html
 #define COEFF_LEN 173
 #define ENERGY_LEN 100
 double A[] = {
@@ -386,6 +385,8 @@ double A[] = {
     0.000000000000000004,
     0.000000000000000004
 };
+// https://www.irjet.net/archives/V5/i10/IRJET-V5I10118.pdf
+// https://nl.mathworks.com/help/signal/ref/blackmanharris.html
 double BlackmanHarris[] = {
 0.0001,
 0.0001,

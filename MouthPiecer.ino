@@ -29,6 +29,7 @@
 #define PB_ARRAY_SIZE 16
 #define BUTTON_SCANNING_SPEED_MS 20
 #define BUTTON_LONGPRESS_DURATION 30
+#define BUTTON_DBLCLICK_MAXDURATION 450
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<= Your configuration here
 
 #define VERSION "1"
@@ -61,7 +62,7 @@ long lastDemoTime = 0;
 byte breathValueMin = BREATH_VALUE_MIN;
 byte currentBreathValue;
 long lastButtonTimer = 0;
-
+long lastButtonFallingTimer = 0;
 boolean buttonStateMem = false;
 boolean buttonState = false;
 boolean isButtonRising = false;
@@ -160,6 +161,7 @@ void SendPitchBend(int pitchBend, byte channel = 1) {
 #endif
 }
 
+// #################################### BUTTON EVENTS HANDLING #########################################
 boolean buttonGet() {
   boolean bs = (!digitalRead(BUTTON_PIN));
   if (bs) {
@@ -172,31 +174,48 @@ boolean buttonGet() {
   return bs;
 }
 
-void buttonRisingEvent() {
-#ifdef DEBUG_BUTTON_EVENTS
-  Serial.println("RISING");
-#endif
-}
-void buttonFallingEvent() {
+void buttonClickEvent() {
   program += 1;
   if (program > 127) program = 0;
   if (program < 0)   program = 127;
   SendProgramChange((byte)program);
-#ifdef DEBUG_BUTTON_EVENTS
-  Serial.println("FALLING");
-#endif
-}
-void buttonIdleEvent() {}
-void buttonClickEvent() {
+
 #ifdef DEBUG_BUTTON_EVENTS
   Serial.println("BTNCLK");
 #endif
 }
 void buttonDblClickEvent() {
+  program -= 1;
+  if (program > 127) program = 0;
+  if (program < 0)   program = 127;
+  SendProgramChange((byte)program);
+
 #ifdef DEBUG_BUTTON_EVENTS
   Serial.println("BTNDBLCLK");
 #endif
 }
+
+void buttonRisingEvent() {
+#ifdef DEBUG_BUTTON_EVENTS
+  Serial.println("RISING");
+#endif
+  if (btnCount == 0) lastButtonFallingTimer = millis();
+}
+
+void buttonFallingEvent() {
+  //Serial.print(btnCount); Serial.print(", "); Serial.println(millis() - lastButtonFallingTimer);
+  if (btnCount == 2) {
+    if (millis() - lastButtonFallingTimer < BUTTON_DBLCLICK_MAXDURATION) { buttonDblClickEvent(); }
+    btnCount = 0;
+  }
+#ifdef DEBUG_BUTTON_EVENTS
+  Serial.println("FALLING");
+#endif
+}
+void buttonIdleEvent() {
+  if (btnCount == 1 && millis() - lastButtonFallingTimer > BUTTON_DBLCLICK_MAXDURATION) { buttonClickEvent(); btnCount = 0; }
+}
+
 void buttonLongEvent() {
   breathValueMin = currentBreathValue + 2;
   Serial.println("Minimum breath set to value " + String(breathValueMin));
@@ -212,28 +231,34 @@ void buttonLongEvent() {
 }
 
 void ProcessButtonEvents() {
-  if (millis() - lastButtonTimer > BUTTON_SCANNING_SPEED_MS) {
-    if (buttonStateMem == false && buttonState == true) {        //Handles button rising edge
+  if (millis() - lastButtonTimer > BUTTON_SCANNING_SPEED_MS) { //Handles button rising edge event
+    if (buttonStateMem == false && buttonState == true) {
       isButtonRising = true;
       isButtonFalling = false;
       buttonRisingEvent();
-    } else if (buttonStateMem == true && buttonState == false) { //Handles button falling edge
+    } 
+    else if (buttonStateMem == true && buttonState == false) //Handles button falling edge event
+    {
       if (btnLong >= BUTTON_LONGPRESS_DURATION + 1) {
-        btnLong = 0;
         buttonStateMem = false; buttonState = false;
-      } else {
+      } 
+      else 
+      {
         btnCount += 1;
         isButtonRising = false;
         isButtonFalling = true;
         buttonFallingEvent();
-        btnLong = 0;
       }
-    } else {
+      btnLong = 0;
+    } 
+    else 
+    {
       isButtonRising = false;
       isButtonFalling = false;
       buttonIdleEvent();
     }
-    if (btnLong == BUTTON_LONGPRESS_DURATION) {
+
+    if (btnLong == BUTTON_LONGPRESS_DURATION) {              //Handles button long-press event
       btnLong += 1;
       buttonLongEvent();
     }

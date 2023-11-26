@@ -1,5 +1,5 @@
 /*
- *      MOUTHPIECE'R  MIDI  DEVICE : device for adding CC to your TravelSax 
+ *      MOUTHPIECE'R  MIDI  DEVICE : device for adding CC MIDI messages to your TravelSax MIDI flux
  *      Coded by LM CROISEZ, November 2023
  *      License: LGPL
  */
@@ -8,28 +8,26 @@
 #include <ADC.h>
 #include <ADC_util.h>
 #include <MIDI.h>
+#include "LButton.h"
 
 // Your configuration here =>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-#define DOUBLE  //if you have alot of RAM, uncoment the following for extra FFT precision.
+//#define DOUBLE  //if you have alot of RAM, uncoment the following for extra FFT precision.
 //#define USE_DIN_FOR_MIDIOUT  // You can send MIDIOUT through DIN-5 plug, or through usbMidi device. Use USE_DIN_FOR_MIDIOUT define for this purpose.
 //#define USE_ETHERNET         // You can use a Teensy4.1 Ethernet adapter to have access to web service for configuration and debug. Use USE_ETHERNET define for this purpose.
 //#define USE_DEMO             // You can generate fake MIDI traffic as a demo, when no MIDI device is connected on the USBHost MIDI port. Use USE_DEMO define for this purpose.
 //#define DEBUG_PITCHBEND      // Uncomment to print PitchBend values in serial terminal
 //#define DEBUG_MIDI_MSG       // Uncomment to print MIDI messages in serial terminal
 //#define DEBUG_CCSAMPLING     // Uncomment to print HP-filtered values in serial terminal
-//#define DEBUG_BUTTON_EVENTS  // Uncomment to debug button events
-
 #define RESET_PB_MINMAX_WITH_BUTTONPRESS  // Uncomment to allow reset of PitchBend min & max values while button is pressed
 #define BREATH_VALUE_MIN 19
+#define DEFAULT_MIDI_VELOCITY 127
+#define DEFAULT_MIDI_CHANNEL 1
 #define CC_BREATH 2
 #define CC_SAMPLING 115
 #define ENERGY_THRESH 40.0
 #define ENERGY_MAX 150.0
 #define BUTTON_PIN 8
 #define PB_ARRAY_SIZE 16
-#define BUTTON_SCANNING_SPEED_MS 20
-#define BUTTON_LONGPRESS_DURATION 30
-#define BUTTON_DBLCLICK_MAXDURATION 450
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<= Your configuration here
 
 #define VERSION "1"
@@ -61,15 +59,8 @@ long lastEthernetClientTime = 0;
 long lastDemoTime = 0;
 byte breathValueMin = BREATH_VALUE_MIN;
 byte currentBreathValue;
-long lastButtonTimer = 0;
-long lastButtonFallingTimer = 0;
-boolean buttonStateMem = false;
-boolean buttonState = false;
-boolean isButtonRising = false;
-boolean isButtonFalling = false;
-byte btnCount = 0;
-byte btnLong = 0;
-int program = 0;
+int currentProgramNumber = 0;
+LButton button = LButton();
 
 //___________________________________________________________________________________________________
 void debugPlot(String varname, int val, int next = 0) {
@@ -96,7 +87,7 @@ void debugPlotf(String varname, double val, int next = 0) {
 }
 
 //___________________________________________________________________________________________________
-void SendNoteOn(byte note, byte velocity = 127, byte channel = 1) {
+void SendNoteOn(byte note, byte velocity = DEFAULT_MIDI_VELOCITY, byte channel = DEFAULT_MIDI_CHANNEL) {
 #ifdef DEBUG_MIDI_MSG
   Serial.println("NOTEON: " + String(note) + " velocity=" + String(velocity));
 #endif
@@ -109,7 +100,7 @@ void SendNoteOn(byte note, byte velocity = 127, byte channel = 1) {
 }
 
 //___________________________________________________________________________________________________
-void SendNoteOff(byte note, byte channel = 1) {
+void SendNoteOff(byte note, byte channel = DEFAULT_MIDI_CHANNEL) {
 #ifdef DEBUG_MIDI_MSG
   Serial.println("NOTEOFF: " + String(note));
 #endif
@@ -122,7 +113,7 @@ void SendNoteOff(byte note, byte channel = 1) {
 }
 
 //___________________________________________________________________________________________________
-void SendControlChange(byte cc, byte value, byte channel = 1) {
+void SendControlChange(byte cc, byte value, byte channel = DEFAULT_MIDI_CHANNEL) {
 #ifdef DEBUG_MIDI_MSG
   if (cc == CC_SAMPLING) {
     Serial.println("CC" + String(cc) + " = " + String(value));
@@ -137,11 +128,11 @@ void SendControlChange(byte cc, byte value, byte channel = 1) {
 }
 
 //___________________________________________________________________________________________________
-void SendProgramChange(byte value, byte channel = 1) {
+void SendProgramChange(byte value, byte channel = DEFAULT_MIDI_CHANNEL) {
 #ifdef DEBUG_MIDI_MSG
-    Serial.println("Program changed to " + String(value));
+  Serial.println("Program changed to " + String(value));
 #endif
-Serial.println("Program changed to " + String(value));
+  Serial.println("Program changed to " + String(value));
 #ifdef USE_DIN_FOR_MIDIOUT
   MIDI.sendProgramChange(value, channel);
 #else
@@ -149,7 +140,7 @@ Serial.println("Program changed to " + String(value));
 #endif
 }
 
-void SendPitchBend(int pitchBend, byte channel = 1) {
+void SendPitchBend(int pitchBend, byte channel = DEFAULT_MIDI_CHANNEL) {
   //#ifdef DEBUG_MIDI_MSG
   //  Serial.println("Bend = " + String(pitchBend));
   //#endif
@@ -161,62 +152,21 @@ void SendPitchBend(int pitchBend, byte channel = 1) {
 #endif
 }
 
-// #################################### BUTTON EVENTS HANDLING #########################################
-boolean buttonGet() {
-  boolean bs = (!digitalRead(BUTTON_PIN));
-  if (bs) {
-    buttonState = true;
-    btnLong += 1;
-    //Serial.println(btnLong);
-  } else {
-    buttonState = false;
-  }
-  return bs;
+void increment_program_number(void) {
+  currentProgramNumber += 1;
+  if (currentProgramNumber > 127) currentProgramNumber = 0;
+  if (currentProgramNumber < 0) currentProgramNumber = 127;
+  SendProgramChange((byte)currentProgramNumber);
 }
 
-void buttonClickEvent() {
-  program += 1;
-  if (program > 127) program = 0;
-  if (program < 0)   program = 127;
-  SendProgramChange((byte)program);
-
-#ifdef DEBUG_BUTTON_EVENTS
-  Serial.println("BTNCLK");
-#endif
-}
-void buttonDblClickEvent() {
-  program -= 1;
-  if (program > 127) program = 0;
-  if (program < 0)   program = 127;
-  SendProgramChange((byte)program);
-
-#ifdef DEBUG_BUTTON_EVENTS
-  Serial.println("BTNDBLCLK");
-#endif
+void decrement_program_number(void) {
+  currentProgramNumber -= 1;
+  if (currentProgramNumber > 127) currentProgramNumber = 0;
+  if (currentProgramNumber < 0) currentProgramNumber = 127;
+  SendProgramChange((byte)currentProgramNumber);
 }
 
-void buttonRisingEvent() {
-#ifdef DEBUG_BUTTON_EVENTS
-  Serial.println("RISING");
-#endif
-  if (btnCount == 0) lastButtonFallingTimer = millis();
-}
-
-void buttonFallingEvent() {
-  //Serial.print(btnCount); Serial.print(", "); Serial.println(millis() - lastButtonFallingTimer);
-  if (btnCount == 2) {
-    if (millis() - lastButtonFallingTimer < BUTTON_DBLCLICK_MAXDURATION) { buttonDblClickEvent(); }
-    btnCount = 0;
-  }
-#ifdef DEBUG_BUTTON_EVENTS
-  Serial.println("FALLING");
-#endif
-}
-void buttonIdleEvent() {
-  if (btnCount == 1 && millis() - lastButtonFallingTimer > BUTTON_DBLCLICK_MAXDURATION) { buttonClickEvent(); btnCount = 0; }
-}
-
-void buttonLongEvent() {
+void set_minimum_breath_value(void) {
   breathValueMin = currentBreathValue + 2;
   Serial.println("Minimum breath set to value " + String(breathValueMin));
 #ifdef RESET_PB_MINMAX_WITH_BUTTONPRESS
@@ -224,49 +174,6 @@ void buttonLongEvent() {
   pbMax = -2000;
   energyMax = 0;
 #endif
-
-#ifdef DEBUG_BUTTON_EVENTS
-  Serial.println("BTNLONG");
-#endif
-}
-
-void ProcessButtonEvents() {
-  if (millis() - lastButtonTimer > BUTTON_SCANNING_SPEED_MS) { //Handles button rising edge event
-    if (buttonStateMem == false && buttonState == true) {
-      isButtonRising = true;
-      isButtonFalling = false;
-      buttonRisingEvent();
-    } 
-    else if (buttonStateMem == true && buttonState == false) //Handles button falling edge event
-    {
-      if (btnLong >= BUTTON_LONGPRESS_DURATION + 1) {
-        buttonStateMem = false; buttonState = false;
-      } 
-      else 
-      {
-        btnCount += 1;
-        isButtonRising = false;
-        isButtonFalling = true;
-        buttonFallingEvent();
-      }
-      btnLong = 0;
-    } 
-    else 
-    {
-      isButtonRising = false;
-      isButtonFalling = false;
-      buttonIdleEvent();
-    }
-
-    if (btnLong == BUTTON_LONGPRESS_DURATION) {              //Handles button long-press event
-      btnLong += 1;
-      buttonLongEvent();
-    }
-
-    lastButtonTimer = millis();
-    buttonStateMem = buttonState;
-    buttonState = buttonGet();
-  }
 }
 
 // ########################################### DEMOS>> ###########################################
@@ -344,14 +251,10 @@ void CapturePitchBend() {
   oldpbAnalog = pbAnalog;
 }
 
-
-
 //___________________________________________________________________________________________________
 double fmap(double x, double in_min, double in_max, double out_min, double out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
-
-
 
 //___________________________________________________________________________________________________
 // https://fiiir.com/
@@ -799,6 +702,11 @@ void setup() {
   pinMode(A1, INPUT);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
+  button.init(BUTTON_PIN, 450);
+  button.onClick(increment_program_number);
+  button.onDblClick(decrement_program_number);
+  button.onPressedFor(set_minimum_breath_value, 600);
+
   adc->adc1->setAveraging(0);                                      // set number of averages
   adc->adc1->setResolution(12);                                    // set bits of resolution
   adc->adc1->setConversionSpeed(ADC_CONVERSION_SPEED::MED_SPEED);  // change the conversion speed
@@ -849,7 +757,7 @@ void loop() {
 #endif
 
   ProcessMidiLoop();
-  ProcessButtonEvents();
+  button.process_events();
 
 #ifdef USE_DEMO
   if (millis() - lastDemoTime > 3000) {

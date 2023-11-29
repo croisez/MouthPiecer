@@ -700,9 +700,8 @@ void setup() {
 
   pinMode(LedPin, OUTPUT);
   pinMode(A1, INPUT);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  button.init(BUTTON_PIN, 450);
+  button.Begin(BUTTON_PIN, 450);
   button.onClick(increment_program_number);
   button.onDblClick(decrement_program_number);
   button.onPressedFor(set_minimum_breath_value, 600);

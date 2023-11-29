@@ -1,3 +1,4 @@
+#include "core_pins.h"
 #include <stdint.h>
 /**
  * LButton.cpp
@@ -10,11 +11,11 @@
 
 LButton::LButton(void){};
 
-void LButton::init(uint8_t pin, int dblclick_max_duration_ms) {
-  LButton::init(pin, dblclick_max_duration_ms, BUTTON_SCANNING_SPEED_MS);
+void LButton::Begin(uint8_t pin, int dblclick_max_duration_ms, bool pullup_enable = true, bool active_low = false) {
+  LButton::Begin(pin, dblclick_max_duration_ms, BUTTON_SCANNING_SPEED_MS);
 }
 
-void LButton::init(uint8_t pin, int dblclick_max_duration_ms, int scanning_speed_ms) {
+void LButton::Begin(uint8_t pin, int dblclick_max_duration_ms, int scanning_speed_ms, bool pullup_enable = true, bool active_low = false) {
   _scanning_speed_ms = scanning_speed_ms;
   _dblclick_max_duration = dblclick_max_duration_ms;
   isFalling = false;
@@ -26,6 +27,12 @@ void LButton::init(uint8_t pin, int dblclick_max_duration_ms, int scanning_speed
   _current_state = false;
   _active_low = false;
   _pin = pin;
+  _pullup_enabled = pullup_enable;
+
+  if (_pullup_enabled) 
+    pinMode(_pin, INPUT_PULLUP); 
+  else
+    pinMode(_pin, INPUT);
 }
 
 void LButton::onClick(void (*cb)(void) = NULL) {

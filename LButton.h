@@ -19,8 +19,8 @@ class LButton {
 public:
   // Common functions.
   LButton(void);
-  void init(uint8_t pin, int max_dblclick_duration_ms);
-  void init(uint8_t pin, int max_dblclick_duration_ms, int scanning_speed_ms);
+  void Begin(uint8_t pin, int max_dblclick_duration_ms, bool pullup_enable = true, bool active_low = false);
+  void Begin(uint8_t pin, int max_dblclick_duration_ms, int scanning_speed_ms, bool pullup_enable = true, bool active_low = false);
   void onClick(void (*cb)(void));     // Call a callback function when the button has been pressed and released.
   void onDblClick(void (*cb)(void));  // Call a callback function when the button has been pressed and released 2 times in a row
   //void onPressedFor(void (*cb)(void));
@@ -42,6 +42,7 @@ protected:
   boolean isRising;
   boolean isFalling;
   uint8_t _pin;
+  bool _pullup_enabled;	// Internal pullup resistor enabled.
   uint32_t _scanning_speed_ms;
   uint32_t _dblclick_max_duration;
   uint32_t _longpress_duration_ms;

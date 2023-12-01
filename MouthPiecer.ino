@@ -89,7 +89,7 @@ void debugPlotf(String varname, double val, int next = 0) {
 //___________________________________________________________________________________________________
 void SendNoteOn(byte note, byte velocity = DEFAULT_MIDI_VELOCITY, byte channel = DEFAULT_MIDI_CHANNEL) {
 #ifdef DEBUG_MIDI_MSG
-  Serial.println("NOTEON: " + String(note) + " velocity=" + String(velocity));
+  Serial.println("NOTEON: " + String(note) + " velocity=" + String(velocity) + " on channel " + String(channel));
 #endif
 
 #ifdef USE_DIN_FOR_MIDIOUT
@@ -102,7 +102,7 @@ void SendNoteOn(byte note, byte velocity = DEFAULT_MIDI_VELOCITY, byte channel =
 //___________________________________________________________________________________________________
 void SendNoteOff(byte note, byte channel = DEFAULT_MIDI_CHANNEL) {
 #ifdef DEBUG_MIDI_MSG
-  Serial.println("NOTEOFF: " + String(note));
+  Serial.println("NOTEOFF: " + String(note) + " on channel " + String(channel));
 #endif
 
 #ifdef USE_DIN_FOR_MIDIOUT
@@ -116,7 +116,7 @@ void SendNoteOff(byte note, byte channel = DEFAULT_MIDI_CHANNEL) {
 void SendControlChange(byte cc, byte value, byte channel = DEFAULT_MIDI_CHANNEL) {
 #ifdef DEBUG_MIDI_MSG
   if (cc == CC_SAMPLING) {
-    Serial.println("CC" + String(cc) + " = " + String(value));
+    Serial.println("CC" + String(cc) + " = " + String(value) + " on channel " + String(channel));
   }
 #endif
 
@@ -130,9 +130,11 @@ void SendControlChange(byte cc, byte value, byte channel = DEFAULT_MIDI_CHANNEL)
 //___________________________________________________________________________________________________
 void SendProgramChange(byte value, byte channel = DEFAULT_MIDI_CHANNEL) {
 #ifdef DEBUG_MIDI_MSG
-  Serial.println("Program changed to " + String(value));
+  Serial.println("Program changed to " + String(value) + " on channel " + String(channel));
 #endif
-  Serial.println("Program changed to " + String(value));
+
+Serial.println("Program changed to " + String(value) + " on channel " + String(channel));
+
 #ifdef USE_DIN_FOR_MIDIOUT
   MIDI.sendProgramChange(value, channel);
 #else
@@ -142,7 +144,7 @@ void SendProgramChange(byte value, byte channel = DEFAULT_MIDI_CHANNEL) {
 
 void SendPitchBend(int pitchBend, byte channel = DEFAULT_MIDI_CHANNEL) {
   //#ifdef DEBUG_MIDI_MSG
-  //  Serial.println("Bend = " + String(pitchBend));
+  //  Serial.println("Bend = " + String(pitchBend) + " channel=" + String(channel));
   //#endif
 
 #ifdef USE_DIN_FOR_MIDIOUT
@@ -739,6 +741,10 @@ void setup() {
   delay(200);
   digitalWrite(LedPin, LOW);
   delay(200);
+
+  //Serial.println("Midi channel: " + String(DEFAULT_MIDI_CHANNEL));
+  Serial.println("CC used for breath: " + String(CC_BREATH));
+  Serial.println("CC used for voice sampling: " + String(CC_SAMPLING));
 
   Serial.println("Starting MouthPiecer main loop");
 #ifdef USE_DEMO
